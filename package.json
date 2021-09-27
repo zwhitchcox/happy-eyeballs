@@ -1,0 +1,25 @@
+{
+  "name": "happy-eyeballs",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "node -r ts-node/register ./test/cli.ts",
+    "debug": "NODE_DEBUG=happy-eyeballs-debug npm test",
+    "verbose": "NODE_DEBUG=happy-eyeballs,happy-eyeballs-debug npm test",
+    "lint": "balena-lint --typescript src test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/chalk": "^2.2.0",
+    "@types/expect": "^24.3.0",
+    "abort-controller": "^3.0.0",
+    "chalk": "^4.1.2",
+    "expect": "^27.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "^16.10.1"
+  }
+}
