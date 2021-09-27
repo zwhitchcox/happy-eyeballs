@@ -3,14 +3,10 @@ import * as tls from 'tls';
 import * as dns from 'dns';
 import { debuglog, promisify } from 'util';
 import { URL } from 'url';
-import { LookupAddress, LookupOptions } from 'dns';
-import { RequestInit as NFRequestInit } from 'node-fetch'
+import { LookupAddress } from 'dns';
 import AbortError from './abort-error';
 import { AbortController, AbortSignal } from 'abort-controller';
 import {once} from 'events';
-import {Agent as HttpsAgent} from 'https'
-const agent = new HttpsAgent();
-agent.createConnection()
 
 const dnsLookup = promisify(dns.lookup);
 
@@ -21,17 +17,6 @@ const debug = debuglog('happy-eyeballs-debug');
 
 // hash of hosts and last associated connection family
 const familyCache = new Map<string, number>();
-
-// export type HappyEyeballsRequestInit = NFRequestInit & RequestInit & {
-//   secure: boolean;
-//   delay?: number; // ms delay between requests
-//   lookup?: (hostname: string, options: LookupOptions) => Promise<LookupAddress | LookupAddress[]>;
-//   family?: number;
-//   hints?: number;
-//   signal?: AbortSignal;
-//   timeout?: number;
-// };
-
 
 export function createConnection(options: net.NetConnectOpts, connectionListener?: () => void): void;
 export function createConnection(port: number, host?: string, connectionListener?: () => void): void;
