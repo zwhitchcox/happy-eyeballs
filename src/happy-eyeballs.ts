@@ -1,16 +1,22 @@
 import * as net from 'net';
-import * as tls from 'tls';
 import * as dns from 'dns';
-import { debuglog, promisify } from 'util';
-import { URL } from 'url';
+import * as dnsAsync from 'dns/promises';
+import { debuglog, promisify, callbackify } from 'util';
 import { LookupAddress } from 'dns';
 import AbortError from './abort-error';
 import { AbortController, AbortSignal } from 'abort-controller';
 import {once} from 'events';
+import {Agent as HttpAgent} from 'http';
+import {Agent as HttpsAgent} from 'https';
+
+const originals = {
+  // @ts-ignore
+  https: HttpAgent.prototype.createConnection,
+  // @ts-ignore
+  http: HttpsAgent.prototype.createConnection,
+}
 
 const dnsLookup = promisify(dns.lookup);
-
-const DEFAULT_NEXT_ADDR_DELAY = 300;
 
 const debug = debuglog('happy-eyeballs-debug');
 // const verbose = debuglog('@balena/fetch-verbose');
@@ -18,11 +24,18 @@ const debug = debuglog('happy-eyeballs-debug');
 // hash of hosts and last associated connection family
 const familyCache = new Map<string, number>();
 
+const defaults = {
+  verbatim: true,
+  family: 0,
+  all: true,
+  delay: 300,
+}
+
 export function createConnection(options: net.NetConnectOpts, connectionListener?: () => void): void;
 export function createConnection(port: number, host?: string, connectionListener?: () => void): void;
 export function createConnection(path: string, connectionListener?: () => void): void;
 export function createConnection(args: any) {
-  const original = this.prototype.createConnection;
+  const original = (this instanceof HttpsAgent) ? originals.https : originals.http;;
   const [_options, cb] = normalizeArgs(args);
   if ((_options as net.IpcNetConnectOpts).path){
     return original(_options, cb);
@@ -32,14 +45,85 @@ export function createConnection(args: any) {
   if (typeof host === 'undefined' || !(host.startsWith('https:') || host.startsWith('http:'))) {
     return original(options, cb);
   }
+  const asyncLookup = options.lookup === dnsAsync.lookup ? options.lookup : options.lookup ?? dnsAsync.lookup;
   happyEyeballs({
-    verbatim: true,
-    family: 0,
-    all: true,
+    ...defaults,
     ...options,
+    lookup: ,
     original,
   }, cb);
 }
+
+function maybeCallbackify(fn: (...args: any) => any) {
+  if (typeof fn !== 'function') {
+    throw new Error('Expected a function.');
+  }
+  return (...args: any[]) => {
+    if (args.length < 1) {
+      return fn(...args);
+    }
+    const last = args.pop();
+    if (typeof last !== 'function') {
+      // last item was not a callback function, do nothing
+      return fn(...args, last);
+    }
+    const lastSpy = spy(last);
+    let result;
+    try {
+      result = fn(...args, lastSpy.fn);
+    } catch (err) {
+      if (!callbackCalled(lastSpy)) {
+        last(null, err);
+      }
+    }
+    if (isPromise(result)) {
+      (async () => {
+        try {
+          const fulfilled = await result;
+          if (!callbackCalled(lastSpy)) {
+            last(null, fulfilled);
+          }
+        } catch (err) {
+          if (!callbackCalled(lastSpy)) {
+            last(err);
+          }
+        }
+      })();
+    } else {
+      if (callbackCalled(lastSpy)) {
+        // looks like last argument was a callback and was already called
+        // don't return promise, in case caller allows immediate result, for which the promise would be wrong
+        return;
+      }
+    }
+  }
+}
+
+function isPromise(thing: any) {
+  return thing && typeof thing.then === 'function';
+}
+
+function callbackCalled(spy) {
+  return spy.called && spy.args[0] instanceof Error || (spy.args[0] == undefined);
+}
+
+function spy(fn: (...args: any) => any) {
+  let called = false;
+  let _args;
+  return {
+    get called() {
+      return called;
+    },
+    get args() {
+      return _args;
+    },
+    fn(...args: any) {
+      _args = args;
+      return fn(...args);
+    }
+  }
+}
+
 
 export type CreateConnectionOptions = {
   original: (options: net.TcpNetConnectOpts, connectionListener?: () => void) => net.Socket;
@@ -49,7 +133,7 @@ export type CreateConnectionOptions = {
 } & net.TcpSocketConnectOpts & dns.LookupOptions;
 
 async function happyEyeballs(options: CreateConnectionOptions, cb: (error: Error | undefined, socket?: net.Socket) => void) {
-  const {host} = options;
+  const {host, lookup} = options;
   debug('Connecting to', host);
 
   const lookupFn = promisify(options.lookup) ?? dnsLookup;
@@ -85,7 +169,6 @@ async function happyEyeballs(options: CreateConnectionOptions, cb: (error: Error
 
     this.destroy();
 
-    debug('trying', trying)
     if (!--trying) {
       if (Array.from(sockets.values()).every(s => s.destroyed)) {
         debug('all sockets destroyed');
