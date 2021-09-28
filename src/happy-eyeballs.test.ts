@@ -1,17 +1,16 @@
 import AbortController from 'abort-controller';
 import { LookupAddress, LookupOptions } from 'dns';
-import dns from 'dns'
-import {lookup as lookupSync} from 'dns'
+import dns from 'dns/promises'
 import { Server } from "http";
-import { promisify } from 'util';
 import { createTestServer } from "../test/server";
 import { expect, test } from "../test/test";
 import fetch from "node-fetch";
-import { createConnection } from './happy-eyeballs';
-const lookup = promisify(lookupSync);
+import { patch, unpatch } from './patch'
+
 
 // TODO: rewrite these without node-fetch
 test.parallel('node', async () => {
+  test('patch', patch);
   test('can fetch local', async () => {
     let server: Server, port: number;
     ({server, port} = await createTestServer());
@@ -31,27 +30,24 @@ test.parallel('node', async () => {
     const resp = await fetch(`https://google.com`);
     expect(resp.status).toBe(200);
   });
+  test('unpatch', unpatch);
 });
 
 test.only('incorrect addresses', async () => {
-
-  let unpolyfill: () => any;
-  test('polyfill http(s) agent', async () => {
-    unpolyfill = await polyfill();
-  })
-
-  test('incorrect addresses', async () => {
     test('with incorrect addresses', async () => {
+      const unpatch = patch({delay: 0});
       const hostname = `https://google.com`;
-      const unmockLookup = mockLookup(hostname, [
+      const unmockLookup = mock(hostname, [
         ...getFakeAddresses(1),
         ...(await lookup(hostname)),
       ])
       await fetch(hostname);
-      unmockLookup()
+      unpatch()
     });
 
     test('fail with all incorrect addresses', async () => {
+      const host = 'https://www.google.com`
+      const unmock = mock(host, getFakeAddresses(20),
       try {
         await fetch(`https://www.google.com`, {
           lookup: async () => getFakeAddresses(20),
@@ -98,44 +94,6 @@ test.only('incorrect addresses', async () => {
     });
   })
 
-  test('unpolyfill agent', () => {
-    unpolyfill?.();
-  })
-
-  async function polyfill() {
-    const { Agent:HttpAgent} = await import('http');
-    const { Agent:HttpsAgent} = await import('https');
-    // @ts-ignore
-    const original = HttpAgent.createConnection = HttpsAgent.createConnection;
-    // @ts-ignore
-    HttpAgent.createConnection = HttpsAgent.createConnection = createConnection;
-    // @ts-ignore
-    return () => HttpAgent.createConnection = HttpsAgent.createConnection = original;
-  }
-
-  async function withFake(hostname: string, num: number, fn) {
-
-  }
-
-  async function withMocks(map: {[hostname: string]: LookupAddress[]}, fn: () => any) {
-    let unmock = () => {};
-    for (const [hostname, addresses] of Object.entries<LookupAddress[]>(map)) {
-      const original = unmock;
-      const new_ = mockLookup(hostname, addresses);
-      unmock = () => {
-        original();
-        new_();
-      }
-    }
-    await fn();
-    unmock();
-  }
-  async function withMock(hostname: string, addresses: LookupAddress[], fn: () => any) {
-    const unmock = mockLookup(hostname, addresses);
-    fn();
-    unmock();
-  }
-
   async function lookup(host: string) {
     const { lookup:lookupAsync } = await import('dns/promises');
     return lookupAsync(host, {
@@ -145,17 +103,25 @@ test.only('incorrect addresses', async () => {
     })
   }
 
-  function mockLookup(hostname: string, addresses: LookupAddress[]) {
-    const original = dns.lookup;
-    // @ts-ignore
-    dns.lookup = (_hostname: string, cb: any) => {
-      if (hostname === _hostname) {
-        cb(null, addresses)
-      }
-      original(_hostname, cb);
+  function mockLookup(mocks: {[hostname: string]: LookupAddress[]}): (...args: any) => LookupAddress[];
+  function mockLookup(hostname: string, addresses: LookupAddress[]): (...args: any) => LookupAddress[];
+  function mockLookup(...args) {
+    let mocks: {[hostname: string]: LookupAddress[]} = {};
+    if (typeof args[0] === 'string') {
+      mocks = {
+        [args[0]]: args[1]
+      };
     }
-    // @ts-ignore
-    return () => dns.lookup = original;
+    mocks = args[0];
+    const original = dns.lookup;
+
+    return (hostname: string, cb: any) => {
+      if (hostname in mocks) {
+        cb(null, mocks[hostname])
+      } else {
+        original(hostname, cb);
+      }
+    }
   }
 
   function getFakeAddresses(num: number) {
