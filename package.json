@@ -8,7 +8,7 @@
     "debug": "NODE_DEBUG=happy-eyeballs-debug npm test",
     "verbose": "NODE_DEBUG=happy-eyeballs,happy-eyeballs-debug npm test",
     "lint": "balena-lint --typescript src test",
-    "build": "tsc"
+    "build": "./node_modules/.bin/tsc"
   },
   "keywords": [],
   "author": "",

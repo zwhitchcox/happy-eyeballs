@@ -228,8 +228,8 @@ function lookupPromise(host: string, options: LookupOptions) {
       }
       res(result);
     }
-    debug('options.lookup', options.lookup);
     const result = (options.lookup ?? lookupAsync)(host, {
+      // @ts-ignore
       all: true,
       family: 0,
       verbatim: true,
