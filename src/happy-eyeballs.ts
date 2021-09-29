@@ -40,8 +40,13 @@ export async function happyEyeballs(this: Agent, options: ClientRequestArgs, cb:
     throw new Error('Host name not supplied.');
   }
 
-  const lookups = await lookupPromise(hostname, options);
-  debug('lookups', lookups);
+  let lookups;
+  try {
+    lookups = await lookupPromise(hostname, options);
+  } catch (err: any) {
+    cb(err);
+    return;
+  }
 
   if (!lookups.length) {
     cb(new Error(`Could not resolve host, ${hostname}`));
@@ -52,15 +57,6 @@ export async function happyEyeballs(this: Agent, options: ClientRequestArgs, cb:
 
   const track = getTracker(hostname, lookups.length, ac, cb);
   const getHostConnect = (host: string) => () => {
-    if (core.https === connect) {
-      debug('Agent is core HttpsAgent');
-      debug('instance', this instanceof HttpsAgent);
-      debug('protocol', options.protocol === 'https:');
-      debug('defaultPort', this.defaultPort === 443);
-    }
-    if (core.http === connect) {
-      debug('Agent is core HttpAgent');
-    }
     debug('Trying...', `${host}:${options.port}`);
 
     return track(connect.call(this, {
@@ -219,12 +215,10 @@ function lookupPromise(host: string, options: LookupOptions) {
   return new Promise<LookupAddress[]>(async (res, rej) => {
     const cb = (err: Error | null, result: string | LookupAddress[], family?: number) => {
       if (err) {
-        rej(err);
-        return;
+        return rej(err);
       }
       if (typeof result === 'string') {
-        res([{address: result, family: family!}])
-        return;
+        return res([{address: result, family: family!}])
       }
       res(result);
     }
@@ -235,7 +229,11 @@ function lookupPromise(host: string, options: LookupOptions) {
       verbatim: true,
       ...options,
     }, cb);
-    res(ensureArray(await result));
+    try {
+      res(ensureArray(await result));
+    } catch (err) {
+      rej(err);
+    }
   })
 }
 
