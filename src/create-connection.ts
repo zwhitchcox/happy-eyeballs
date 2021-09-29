@@ -2,40 +2,49 @@ import * as net from 'net';
 import {Agent as HttpAgent} from 'http';
 import {Agent as HttpsAgent} from 'https';
 import { originals as _originals } from './patch';
-import { happyEyeballs, HappyEyeballsOptions } from './happy-eyeballs';
+import { happyEyeballs } from './happy-eyeballs';
+import { debuglog } from 'util';
+import { ClientRequestArgs } from './interfaces';
 
-const originalCCs = {
-  // @ts-ignore
-  https: HttpAgent.prototype.createConnection,
-  // @ts-ignore
-  http: HttpsAgent.prototype.createConnection,
+const debug = debuglog('happy-eyeballs-debug')
+
+export const core = {
+  https: HttpsAgent.prototype.createConnection,
+  http: HttpAgent.prototype.createConnection,
 }
 
-export type ConnectionCb = (error: Error | undefined, socket?: net.Socket) => void;
+export type ConnectionCb = (error: Error | null | undefined, socket?: net.Socket) => net.Socket | undefined;
 
-export function createConnection(options: net.NetConnectOpts, connectionListener?: () => void): void;
+export type Agent = (HttpAgent | HttpsAgent);
+
+export function createConnection(options: ClientRequestArgs, connectionListener?: () => void): void;
 export function createConnection(port: number, host?: string, connectionListener?: () => void): void;
 export function createConnection(path: string, connectionListener?: () => void): void;
-export function createConnection(args: any) {
+export function createConnection(this: Agent, ...args: any[]) {
   // don't call happy eyeballs if host is an ip address
-  const originalCC = _originals.get(this) ?? ((this instanceof HttpsAgent || this.defaultPort === 443) ? originalCCs.https : originalCCs.http);
+
+  // if patch was called explicitly, we should have original functions
+  const originalProtos = _originals.get(this.constructor) ?? [];
+  const connect = originalProtos[0]?.createConnection ?? ((this instanceof HttpsAgent || args[0]?.protocol === 'https:' || this.defaultPort === 443) ? core.https : core.http);
+  debug('ishttp', this instanceof HttpAgent, connect === core.http);
+  debug('ishttps', this instanceof HttpsAgent, connect === core.https);
+
   const [options, cb] = normalizeArgs(args);
-  // @ts-ignore
-  if ((options).path || net.isIP(options.hostname)){
-    return originalCC(options, cb);
+  if (options.path || net.isIP(options.hostname!)){
+    return connect!(options, cb);
   }
 
-  happyEyeballs({connect: originalCC, ...(options as unknown as HappyEyeballsOptions)}, cb);
+  happyEyeballs.call(this, {createConnection: connect, ...options}, cb!);
 }
 
-// normalize arguments for net.createConnection to [options, cb]
-function normalizeArgs(args:any): [net.NetConnectOpts, () => void] {
+// normalize arguments for createConnection to [options, cb]
+function normalizeArgs(args:any): [ClientRequestArgs, ConnectionCb] {
   let arr;
 
   if (args.length === 0) {
     arr = [{}, null];
-    arr[normalizedArgsSymbol] = true;
-    return arr;
+    arr[normalizedArgsSymbol as any] = true;
+    return arr as any;
   }
 
   const arg0 = args[0];
@@ -63,12 +72,12 @@ function normalizeArgs(args:any): [net.NetConnectOpts, () => void] {
   else
     arr = [options, cb];
 
-  arr[normalizedArgsSymbol] = true;
-  return arr;
+  arr[normalizedArgsSymbol as any] = true;
+  return arr as any;
 }
 
 const normalizedArgsSymbol = Symbol("normalized args");
-function toNumber(x) { return (x = Number(x)) >= 0 ? x : false; }
-function isPipeName(s) {
+function toNumber(x: any): false | number { return (x = Number(x)) >= 0 ? x : false; }
+function isPipeName(s: any): boolean {
   return typeof s === 'string' && toNumber(s) === false;
 }

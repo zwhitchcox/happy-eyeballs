@@ -1,4 +1,5 @@
-export const TESTING = process.env.NODE_ENV === 'happy-eyeballs-test';
+import pkg from '../package.json'
+export const TESTING = process.env.NODE_ENV === pkg.name + '-test';
 export const MANUAL = (process.env.NODE_DEBUG ?? '').includes(
-	'happy-eyeballs-manual',
+	pkg.name + '-manual',
 );

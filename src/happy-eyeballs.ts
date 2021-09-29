@@ -1,46 +1,45 @@
 import * as net from 'net';
-import { debuglog, promisify } from 'util';
+import { debuglog } from 'util';
 import { LookupAddress } from 'dns';
 import AbortError from './abort-error';
 import { AbortController, AbortSignal } from 'abort-controller';
 import { originals as _originals } from './patch';
-import { ConnectionCb } from './create-connection';
-import { Agent as HttpAgent } from 'http'
-import { Agent as HttpsAgent } from 'https'
+import { Agent, ConnectionCb } from './create-connection';
+import { Agent as HttpAgent } from 'http';
+import { Agent as HttpsAgent } from 'https';
+import * as tls from 'tls';
+import * as dns from 'dns/promises';
+import { ClientRequestArgs } from './interfaces';
 
-const core = {
+const debug = debuglog('happy-eyeballs-debug');
+
+const DEFAULT_DELAY = 300;
+
+export const core = {
   // @ts-ignore
   https: HttpsAgent.prototype.createConnection,
   // @ts-ignore
   http: HttpAgent.prototype.createConnection,
 }
 
-const debug = debuglog('happy-eyeballs-debug');
-
-export type HappyEyeballsOptions = {
-  // connect is the original connection that this one is patching
-  connect: (options: net.TcpNetConnectOpts | {servername: string}, connectionListener?: () => void) => net.Socket;
-  signal?: AbortSignal;
-  timeout?: number;
-  delay?: number;
-  hostname: string;
-  protocol: string;
-  lookup?: (...args: any) => LookupAddress | LookupAddress[];
-};
 
 type Dict<T> = {[key: string]: T}
 
 // hash of hosts and last associated connection family
 const familyCache: Dict<number> = {};
 
-export async function happyEyeballs(options: HappyEyeballsOptions, cb: ConnectionCb) {
+export async function happyEyeballs(this: Agent, options: ClientRequestArgs, cb: ConnectionCb) {
   const { hostname, protocol } = options;
-  const connect = options.connect ?? this instanceof HttpAgent ?
-    core.http : this instanceof HttpsAgent || protocol === 'https:' || this.defaultPort === 443 ? core.https : core.http;
+
+  // infer original connect in case not patched
+  const connect = options.createConnection ?? ((this instanceof HttpsAgent || protocol === 'https:' || this.defaultPort === 443) ? core.https : core.http);
 
   debug('Connecting to', hostname);
+  if (hostname == null) {
+    throw new Error('Host name not supplied.');
+  }
 
-  const lookups = await lookup(hostname, options);
+  const lookups = await lookupPromise(hostname, options);
 
   if (!lookups.length) {
     cb(new Error(`Could not resolve host, ${hostname}`));
@@ -49,18 +48,36 @@ export async function happyEyeballs(options: HappyEyeballsOptions, cb: Connectio
   const ac = new AbortController;
   options.signal?.addEventListener('abort', ac.abort)
 
-  const track = getTracker(lookups.length, ac, cb);
-  const getHostConnect = (host: string) => () => track(connect({
-    ...options,
-    host,
-    servername: options.hostname,
-  }))
+  const track = getTracker(hostname, lookups.length, ac, cb);
+  const getHostConnect = (host: string) => () => {
+    if (core.https === connect) {
+      debug('Agent is core HttpsAgent');
+      debug('instance', this instanceof HttpsAgent);
+      debug('protocol', options.protocol === 'https:');
+      debug('defaultPort', this.defaultPort === 443);
+    }
+    if (core.http === connect) {
+      debug('Agent is core HttpAgent');
+    }
+    debug('Trying...', `${host}:${options.port}`);
+
+    return track(connect.call(this, {
+      protocol: options.protocol,
+      hash: options.hash,
+      search: options.search,
+      port: options.port,
+      pathname: options.pathname,
+      agent: this,
+      host,
+      servername: options.hostname,
+    }));
+  }
 
   let i = 0;
   for (const batch of zip(lookups, familyCache[hostname])) {
-    const delay = options.delay * i++;
+    const delay = (options.delay ?? DEFAULT_DELAY) * i++;
     for (const host of batch) {
-      wait(delay, ac.signal).then(getHostConnect(host));
+      wait(delay, ac.signal).then(getHostConnect(host)).catch(() => {});
     }
   }
 }
@@ -70,15 +87,15 @@ export async function happyEyeballs(options: HappyEyeballsOptions, cb: Connectio
 // * if all sockets fail or timeout, cb is called with an error
 // * if the abort signal provided by the user is aborted before the above cases,
 //   cb is called with an abort error
-function getTracker(total: number, ac: AbortController, cb: ConnectionCb) {
+function getTracker(hostname: string, total: number, ac: AbortController, cb: ConnectionCb) {
   const state = {
     closed: 0,
     timeouts: 0,
     connected: 0,
     err: undefined,
   }
-  const handlers =  {
-    error(_err) {
+  const handlers = {
+    error(_err: any) {
       state.err ??= _err;
     },
     abort() {
@@ -90,30 +107,36 @@ function getTracker(total: number, ac: AbortController, cb: ConnectionCb) {
         untrack();
       }
     },
-    connect() {
+    connect(this: tls.TLSSocket) {
+      debug('Connected', this.remoteAddress);
       state.connected++;
-      ac.abort();
-      cb(null, this);
+      ac.abort(); // abort wait timeouts
       for (const socket of sockets) {
         if (socket !== this) {
           socket.destroy();
         }
       }
       untrack();
+      // need to untrack errors to restore normal behavior before returning
+      cb(null, this);
       // save last successful connection family for future reference
-      familyCache[this.servername] = net.isIP(this.host);
+      familyCache[hostname] = net.isIP(this.remoteAddress!);
     },
-    timeout() {
+    timeout(this: net.Socket) {
       state.timeouts++;
       this.destroy();
     },
-    close() {
+    close(this: tls.TLSSocket) {
+      debug('Closed', this.remoteAddress);
+      if (ac.signal.aborted) {
+        return;
+      }
       if (++state.closed === total) {
         untrack(this);
         if (state.timeouts === total) {
-          cb(new Error(`Attempts to ${this.servername} timed out.`));
+          cb(new Error(`Attempts to ${hostname} timed out.`));
         } else if (!state.connected) {
-          cb(state.err);
+          cb(state.err!);
         }
       }
     },
@@ -122,22 +145,22 @@ function getTracker(total: number, ac: AbortController, cb: ConnectionCb) {
   ac.signal.addEventListener('abort', handlers.abort, {once: true});
 
   const sockets: net.Socket[] = [];
-
   const untrack = (socket?: net.Socket) => {
     if (socket) {
       sockets.splice(sockets.indexOf(socket), 1);
     }
-    const scks = typeof socket === 'undefined' ? [socket] : sockets;
+    const scks = typeof socket !== 'undefined' ? [socket] : sockets;
     for (const socket of scks) {
       for (const evt in handlers) {
-        socket.off(evt, handlers[evt]);
+        socket.off(evt, handlers[evt as keyof typeof handlers]);
       }
     }
   }
 
   return (socket: net.Socket) => {
+    sockets.push(socket);
     for (const evt in handlers) {
-      socket.on(evt, handlers[evt]);
+      socket.on(evt, handlers[evt as keyof typeof handlers]);
     }
   }
 }
@@ -187,31 +210,34 @@ type LookupOptions = {
   verbatim?: boolean;
   family?: number;
   all?: boolean;
-  lookup?: (...args: any) => LookupAddress | LookupAddress[] | Promise<LookupAddress | LookupAddress[]>;
+  lookup?: net.LookupFunction;
   [key: string]: any;
 }
-function lookup(host, options: LookupOptions) {
+function lookupPromise(host: string, options: LookupOptions) {
   return new Promise<LookupAddress[]>(async (res, rej) => {
-    const cb = (err: Error, result: LookupAddress | LookupAddress[]) => {
+    const cb = (err: Error | null, result: string | LookupAddress[], family?: number) => {
       if (err) {
         rej(err);
       }
-      res([].concat(result));
+      if (typeof result === 'string') {
+        res([{address: result, family: family!}])
+      }
     }
-    const result = options.lookup(host, {
+    const result = (options.lookup ?? dns.lookup)(host, {
       all: true,
       family: 0,
       verbatim: true,
       ...options,
-    }, cb)
-    if (isPromise(result)) {
-      res([].concat(result));
-    }
+    }, cb);
+    res(ensureArray(await result));
   })
 }
 
-function isPromise(arg: any): boolean {
-  return typeof arg?.then === 'function'
+function ensureArray(item: any) {
+  if (!Array.isArray(item)) {
+    return [item];
+  }
+  return item;
 }
 
 // We may want to abort a wait to keep the wait handle from keeping the process open

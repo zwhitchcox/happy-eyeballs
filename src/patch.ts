@@ -1,6 +1,8 @@
 import { Agent as HttpAgent } from 'http';
 import { Agent as HttpsAgent } from 'https';
+import { debuglog } from 'util';
 import { createConnection } from './create-connection';
+const debug = debuglog('happy-eyeballs-debug')
 
 export const originals = new WeakMap<any, Array<any>>();
 
@@ -28,13 +30,18 @@ export function patch(Agent: any = coreAgents, options?: {delay?: number}): void
   Agent.prototype.createConnection = createConnection;
 
   push(originals, Agent, original);
+  debug('originals push', original);
 }
 
 export function unpatch(Agent: any = coreAgents){
+  if (doAll(Agent, unpatch)) {
+    return;
+  }
   if (!originals.has(Agent)) {
     return;
   }
   const original = pop(originals, Agent);
+  debug('originals pop', original);
   Agent.prototype.delay = original.delay;
   Agent.prototype.createConnection = original.createConnection;
 }
