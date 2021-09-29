@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "typeRoots": ["./typings"],
+    "outDir": "./build",
     "target": "es5",
     "module": "commonjs",
     "esModuleInterop": true,

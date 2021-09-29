@@ -31,25 +31,26 @@ const comparecc = (cc1: CC, cc2: CC) => {
 const core = getcc();
 const patchedcc = {http: createConnection, https: createConnection}
 
-test('patch/unpatch', () => {
-  const beforecc = getcc();
-  const fakecc = {
-    https: Symbol(443),
-    http: Symbol(80),
-  }
-  setcc(fakecc);
-  patch();
-  comparecc(getcc(), patchedcc);
-  unpatch();
-  comparecc(getcc(), fakecc);
-  setcc(beforecc);
-})
-
-test('resets correctly', () => {
-  const before = getcc();
-  patch();
-  comparecc(patchedcc, getcc());
-  reset();
-  comparecc(core, getcc());
-  setcc(before);
+test('patch', () => {
+  test('patch/unpatch', () => {
+    const beforecc = getcc();
+    const fakecc = {
+      https: Symbol(443),
+      http: Symbol(80),
+    }
+    setcc(fakecc);
+    patch();
+    comparecc(getcc(), patchedcc);
+    unpatch();
+    comparecc(getcc(), fakecc);
+    setcc(beforecc);
+  })
+  test('resets correctly', () => {
+    const before = getcc();
+    patch();
+    comparecc(patchedcc, getcc());
+    reset();
+    comparecc(core, getcc());
+    setcc(before);
+  })
 })

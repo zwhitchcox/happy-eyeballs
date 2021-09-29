@@ -1,5 +1,5 @@
 import * as net from 'net';
-import { debuglog } from 'util';
+import { debuglog, promisify } from 'util';
 import { LookupAddress } from 'dns';
 import AbortError from './abort-error';
 import { AbortController, AbortSignal } from 'abort-controller';
@@ -8,7 +8,7 @@ import { Agent, ConnectionCb } from './create-connection';
 import { Agent as HttpAgent } from 'http';
 import { Agent as HttpsAgent } from 'https';
 import * as tls from 'tls';
-import * as dns from 'dns/promises';
+import * as dns from 'dns';
 import { ClientRequestArgs } from './interfaces';
 
 const debug = debuglog('happy-eyeballs-debug');
@@ -22,6 +22,7 @@ export const core = {
   http: HttpAgent.prototype.createConnection,
 }
 
+const lookupAsync = promisify(dns.lookup);
 
 type Dict<T> = {[key: string]: T}
 
@@ -40,6 +41,7 @@ export async function happyEyeballs(this: Agent, options: ClientRequestArgs, cb:
   }
 
   const lookups = await lookupPromise(hostname, options);
+  debug('lookups', lookups);
 
   if (!lookups.length) {
     cb(new Error(`Could not resolve host, ${hostname}`));
@@ -218,12 +220,16 @@ function lookupPromise(host: string, options: LookupOptions) {
     const cb = (err: Error | null, result: string | LookupAddress[], family?: number) => {
       if (err) {
         rej(err);
+        return;
       }
       if (typeof result === 'string') {
         res([{address: result, family: family!}])
+        return;
       }
+      res(result);
     }
-    const result = (options.lookup ?? dns.lookup)(host, {
+    debug('options.lookup', options.lookup);
+    const result = (options.lookup ?? lookupAsync)(host, {
       all: true,
       family: 0,
       verbatim: true,

@@ -7,7 +7,8 @@
     "test": "node -r ts-node/register ./test/cli.ts",
     "debug": "NODE_DEBUG=happy-eyeballs-debug npm test",
     "verbose": "NODE_DEBUG=happy-eyeballs,happy-eyeballs-debug npm test",
-    "lint": "balena-lint --typescript src test"
+    "lint": "balena-lint --typescript src test",
+    "build": "tsc"
   },
   "keywords": [],
   "author": "",

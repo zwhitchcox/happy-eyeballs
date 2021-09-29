@@ -1,0 +1,3 @@
+[submodule "node-fetch"]
+	path = node-fetch
+	url = https://github.com/node-fetch/node-fetch
