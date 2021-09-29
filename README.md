@@ -46,7 +46,7 @@ patch(HttpAgent);
 patch(HttpsAgent);
 ```
 
-Although, this is exactly what the `import 'happy-eyeballs/eyepatch';` does anyway.
+Although, this is exactly what the `import 'happy-eyeballs/eye-patch';` does anyway.
 
 You could also implement your own agent and replace the `createConnection` method:
 
