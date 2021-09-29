@@ -2,7 +2,7 @@
   "name": "happy-eyeballs",
   "version": "0.0.1",
   "description": "",
-  "main": "index.js",
+  "main": "build/src/index.js",
   "scripts": {
     "test": "node -r ts-node/register ./test/cli.ts",
     "debug": "NODE_DEBUG=happy-eyeballs-debug npm test",
@@ -10,6 +10,7 @@
     "lint": "balena-lint --typescript src test",
     "build": "./node_modules/.bin/tsc"
   },
+  "repository": "https://github.com/zwhitchcox/happy-eyeballs",
   "keywords": [],
   "author": "",
   "license": "ISC",
