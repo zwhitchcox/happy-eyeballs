@@ -80,7 +80,7 @@ Essentially, the algorithm amounts to this:
   * If yes: try, both addresses concurrently until all have been tried
   * If no: just try the address of the existent family
 4. Proceed with each address in chain, trying both families concurrently until either:
-  1. A connection is made
-  2. All connection attempts time out
-  3. All connection attempt fail
+  *. A connection is made
+  *. All connection attempts time out
+  *. All connection attempt fail
 5. If no connection was successful, return error of the first connection attempt or a "time out" error if all connections timed out
