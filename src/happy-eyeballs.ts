@@ -223,7 +223,6 @@ function lookupPromise(host: string, options: LookupOptions) {
       res(result);
     }
     const result = (options.lookup ?? lookupAsync)(host, {
-      // @ts-ignore
       all: true,
       family: 0,
       verbatim: true,
