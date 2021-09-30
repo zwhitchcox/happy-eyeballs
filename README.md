@@ -42,13 +42,35 @@ import { patch } from 'happy-eyeballs';
 import { Agent as HttpAgent } from 'http';
 import { Agent as HttpsAgent } from 'https';
 
-patch(HttpAgent);
-patch(HttpsAgent);
+patch(HttpAgent, {delay: 300});
+patch(HttpsAgent, {delay: 300});
 ```
 
 Although, this is exactly what the `import 'happy-eyeballs/eye-patch';` does anyway.
 
-You could also implement your own agent and replace the `createConnection` method:
+Note that `delay` refers to the delay before attempting the next addresses. This is the delay browsers use.
+
+Later you can unpatch, which will undo the last patch:
+
+```ts
+unpatch([HttpsAgent, HttpAgent])
+```
+
+or reset to the original values of an agent:
+
+```ts
+reset([HttpsAgent, HttpAgent])
+```
+
+Also, note that the default is `HttpAgent` and `HttpsAgent`, so this has the same effect as
+
+```ts
+reset()
+```
+
+And that goes for `patch` and `unpatch` too.
+
+Finally, you could also implement your own agent and replace the `createConnection` method:
 
 ```ts
 import { createConnection } from 'happy-eyeballs';
@@ -57,10 +79,12 @@ import { Agent as HttpsAgent } from 'https';
 
 export class MyHttpAgent extends HttpAgent {
   createConnection = createConnection;
+  delay = 250;
 }
 
 export class MyHttpsAgent extends HttpsAgent {
   createConnection = createConnection;
+  delay = 250;
 }
 ```
 

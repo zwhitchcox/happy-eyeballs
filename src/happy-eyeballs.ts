@@ -16,9 +16,7 @@ const debug = debuglog('happy-eyeballs-debug');
 const DEFAULT_DELAY = 300;
 
 export const core = {
-  // @ts-ignore
   https: HttpsAgent.prototype.createConnection,
-  // @ts-ignore
   http: HttpAgent.prototype.createConnection,
 }
 
