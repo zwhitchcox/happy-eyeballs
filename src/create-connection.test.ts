@@ -154,7 +154,7 @@ test('incorrect addresses', async () => {
 
 function getFakeAddresses(num: number) {
   const result = [];
-  while (--num) {
+  while (num--) {
     result.push({
       family: 6,
       address: 'dead::' + num.toString(16),

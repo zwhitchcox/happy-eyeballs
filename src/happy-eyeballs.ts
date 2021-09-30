@@ -66,6 +66,7 @@ export async function happyEyeballs(this: Agent, options: ClientRequestArgs, cb:
       agent: this,
       host,
       servername: options.hostname,
+      timeout: options.timeout,
     }));
   }
 
@@ -226,10 +227,12 @@ function lookupPromise(host: string, options: LookupOptions) {
       verbatim: true,
       ...options,
     }, cb);
-    try {
-      res(ensureArray(await result));
-    } catch (err) {
-      rej(err);
+    if (typeof result !== 'undefined') {
+      try {
+        res(ensureArray(await result));
+      } catch (err) {
+        rej(err);
+      }
     }
   })
 }

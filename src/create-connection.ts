@@ -21,16 +21,15 @@ export function createConnection(options: ClientRequestArgs, oncreate: (err: Err
 export function createConnection(port: number, host?: string, oncreate?: (err: Error, socket: net.Socket) => void): net.Socket;
 export function createConnection(path: string, oncreate?: (err: Error, socket: net.Socket) => void): net.Socket;
 export function createConnection(this: Agent, ...args: any[]) {
-  // don't call happy eyeballs if host is an ip address
-
   // if patch was called explicitly, we should have original functions
-  const originalProtos = _originals.get(this.constructor) ?? [];
-  const connect = originalProtos[0]?.createConnection ?? ((this instanceof HttpsAgent || args[0]?.protocol === 'https:' || this.defaultPort === 443) ? core.https : core.http);
+  const originalProtos = _originals.get(this?.constructor) ?? [];
+  const connect = originalProtos[0]?.createConnection ?? ((this instanceof HttpsAgent || args[0]?.protocol === 'https:' || this?.defaultPort === 443) ? core.https : core.http);
   debug('ishttp', this instanceof HttpAgent, connect === core.http);
   debug('ishttps', this instanceof HttpsAgent, connect === core.https);
 
   const [options, cb] = normalizeArgs(args);
   if (options.path || net.isIP(options.hostname!)){
+    // if host is IP, there's only one ip associated, so don't need happy eyeballs
     return connect!(options, cb);
   }
 

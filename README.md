@@ -70,7 +70,7 @@ reset()
 
 And that goes for `patch` and `unpatch` too.
 
-Finally, you could also implement your own agent and replace the `createConnection` method:
+You could also implement your own agent and replace the `createConnection` method:
 
 ```ts
 import { createConnection } from 'happy-eyeballs';
