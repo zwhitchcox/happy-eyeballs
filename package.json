@@ -1,6 +1,6 @@
 {
   "name": "happy-eyeballs",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "",
   "main": "build/src/index.js",
   "scripts": {
