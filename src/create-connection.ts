@@ -17,9 +17,9 @@ export type ConnectionCb = (error: Error | null | undefined, socket?: net.Socket
 
 export type Agent = (HttpAgent | HttpsAgent);
 
-export function createConnection(options: ClientRequestArgs, connectionListener?: () => void): void;
-export function createConnection(port: number, host?: string, connectionListener?: () => void): void;
-export function createConnection(path: string, connectionListener?: () => void): void;
+export function createConnection(options: ClientRequestArgs, oncreate: (err: Error, socket: net.Socket) => void): net.Socket;
+export function createConnection(port: number, host?: string, oncreate?: (err: Error, socket: net.Socket) => void): net.Socket;
+export function createConnection(path: string, oncreate?: (err: Error, socket: net.Socket) => void): net.Socket;
 export function createConnection(this: Agent, ...args: any[]) {
   // don't call happy eyeballs if host is an ip address
 
