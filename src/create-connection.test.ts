@@ -147,6 +147,24 @@ test('incorrect addresses', async () => {
       expect(err.name).toBe('AbortError');
     }
   });
+
+  test('https', async () => {
+    const ac = new AbortController();
+    setup({
+      delay: 1,
+      lookup: () => getFakeAddresses(1)
+    })
+    try {
+      const prom = fetch(`https://api.balena-cloud.com/ping`, {
+        signal: ac.signal,
+      });
+      ac.abort();
+      await prom;
+      throw new Error('Request was not aborted.')
+    } catch (err: any) {
+      expect(err.name).toBe('AbortError');
+    }
+  });
   const originalLookup = dns.lookup;
   test('restore dns.lookup', () => {
     dns.lookup = originalLookup;
@@ -167,11 +185,20 @@ function getFakeAddresses(num: number) {
   return result;
 }
 
-test('request', async () => {
+test.only('request', async () => {
   patch();
   await request('http://www.google.com', function (error, response, body) {
     expect(response.statusCode).toBe(200)
   });
+  await request('https://api.balena-cloud.com/ping', function (error, response, body) {
+    if (error) {
+      throw error
+    }
+    expect(response.statusCode).toBe(200)
+  });
+})
+
+test('https', () => {
 })
 
 process.on('unhandledRejection', (err:any) => {

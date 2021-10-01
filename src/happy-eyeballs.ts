@@ -70,7 +70,7 @@ export async function happyEyeballs(this: Agent, options: ClientRequestArgs, cb:
       host,
       // @ts-ignore
       socket: options.socket,
-      servername: options.hostname,
+      servername: options.servername ?? options.hostname,
       timeout: options.timeout,
     }));
   }
