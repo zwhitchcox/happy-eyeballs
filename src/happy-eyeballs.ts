@@ -131,7 +131,7 @@ function getTracker(hostname: string, total: number, ac: AbortController, cb: Co
       if (++state.closed === total) {
         untrack(this);
         if (state.timeouts === total) {
-          cb(new Error(`Attempts to ${hostname} timed out.`));
+          cb(new Error(`Attempts to connect to ${hostname} all timed out.`));
         } else if (!state.connected) {
           cb(state.err!);
         }
