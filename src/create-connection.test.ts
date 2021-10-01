@@ -9,6 +9,7 @@ import fetch from 'node-fetch'
 import dns from "dns";
 import { LookupAddress } from "dns";
 import AbortController from "abort-controller";
+import request from 'request';
 
 // supporting node 12
 const lookupAsync = promisify(dns.lookup);
@@ -165,6 +166,13 @@ function getFakeAddresses(num: number) {
   }
   return result;
 }
+
+test('request', async () => {
+  patch();
+  await request('http://www.google.com', function (error, response, body) {
+    expect(response.statusCode).toBe(200)
+  });
+})
 
 process.on('unhandledRejection', (err:any) => {
   console.error('unhandled rejection', err);

@@ -12,6 +12,7 @@ import * as dns from 'dns';
 import { ClientRequestArgs } from './interfaces';
 
 const debug = debuglog('happy-eyeballs-debug');
+const verbose = debuglog('happy-eyeballs-debug-verbose');
 
 const DEFAULT_DELAY = 300;
 
@@ -28,12 +29,14 @@ type Dict<T> = {[key: string]: T}
 const familyCache: Dict<number> = {};
 
 export async function happyEyeballs(this: Agent, options: ClientRequestArgs, cb: ConnectionCb) {
-  const { hostname, protocol } = options;
+  const hostname = options.hostname || options.host;
+  const { protocol }= options;
 
   // infer original connect in case not patched
   const connect = options.createConnection ?? ((this instanceof HttpsAgent || protocol === 'https:' || this.defaultPort === 443) ? core.https : core.http);
 
   debug('Connecting to', hostname);
+  verbose('options', options);
   if (hostname == null) {
     throw new Error('Host name not supplied.');
   }
@@ -65,6 +68,8 @@ export async function happyEyeballs(this: Agent, options: ClientRequestArgs, cb:
       pathname: options.pathname,
       agent: this,
       host,
+      // @ts-ignore
+      socket: options.socket,
       servername: options.hostname,
       timeout: options.timeout,
     }));

@@ -28,6 +28,7 @@ export function createConnection(this: Agent, ...args: any[]) {
   debug('ishttps', this instanceof HttpsAgent, connect === core.https);
 
   const [options, cb] = normalizeArgs(args);
+
   if (options.path || net.isIP(options.hostname!)){
     // if host is IP, there's only one ip associated, so don't need happy eyeballs
     return connect!(options, cb);
