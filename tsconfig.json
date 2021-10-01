@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "typeRoots": ["./typings"],
+    "typeRoots": ["node_modules/@types", "typings"],
     "outDir": "build",
     "target": "es5",
     "module": "commonjs",
@@ -11,6 +11,8 @@
     "resolveJsonModule": true,
     "downlevelIteration": true,
     "declaration": true,
+    "sourceMap": true,
+    "importHelpers": true,
   },
-  "include": ["./src/*.ts"],
+  "include": ["./src/*.ts", "./test/*.ts"],
 }

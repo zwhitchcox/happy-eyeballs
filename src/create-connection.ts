@@ -2,11 +2,12 @@ import * as net from 'net';
 import {Agent as HttpAgent} from 'http';
 import {Agent as HttpsAgent} from 'https';
 import { originals as _originals } from './patch';
-import { happyEyeballs } from './happy-eyeballs';
+import { happyEyeballs, LookupFunction } from './happy-eyeballs';
 import { debuglog } from 'util';
 import { ClientRequestArgs } from './interfaces';
 
 const debug = debuglog('happy-eyeballs-debug')
+const verbose = debuglog('happy-eyeballs-debug-verbose');
 
 export const core = {
   https: HttpsAgent.prototype.createConnection,
@@ -16,8 +17,9 @@ export const core = {
 export type ConnectionCb = (error: Error | null | undefined, socket?: net.Socket) => net.Socket | undefined;
 
 export type Agent = (HttpAgent | HttpsAgent);
+export type HappyRequestArgs = ClientRequestArgs & {lookup?: LookupFunction};
 
-export function createConnection(options: ClientRequestArgs, oncreate: (err: Error, socket: net.Socket) => void): net.Socket;
+export function createConnection(options: HappyRequestArgs, oncreate: (err: Error, socket: net.Socket) => void): net.Socket;
 export function createConnection(port: number, host?: string, oncreate?: (err: Error, socket: net.Socket) => void): net.Socket;
 export function createConnection(path: string, oncreate?: (err: Error, socket: net.Socket) => void): net.Socket;
 export function createConnection(this: Agent, ...args: any[]) {
@@ -38,7 +40,7 @@ export function createConnection(this: Agent, ...args: any[]) {
 }
 
 // normalize arguments for createConnection to [options, cb]
-function normalizeArgs(args:any): [ClientRequestArgs, ConnectionCb] {
+function normalizeArgs(args:any): [HappyRequestArgs, ConnectionCb] {
   let arr;
 
   if (args.length === 0) {

@@ -4,12 +4,11 @@ import { LookupAddress } from 'dns';
 import AbortError from './abort-error';
 import { AbortController, AbortSignal } from 'abort-controller';
 import { originals as _originals } from './patch';
-import { Agent, ConnectionCb } from './create-connection';
+import { Agent, ConnectionCb, HappyRequestArgs } from './create-connection';
 import { Agent as HttpAgent } from 'http';
 import { Agent as HttpsAgent } from 'https';
 import * as tls from 'tls';
 import * as dns from 'dns';
-import { ClientRequestArgs } from './interfaces';
 
 const debug = debuglog('happy-eyeballs-debug');
 const verbose = debuglog('happy-eyeballs-debug-verbose');
@@ -28,15 +27,14 @@ type Dict<T> = {[key: string]: T}
 // hash of hosts and last associated connection family
 const familyCache: Dict<number> = {};
 
-export async function happyEyeballs(this: Agent, options: ClientRequestArgs, cb: ConnectionCb) {
+export async function happyEyeballs(this: Agent, options: HappyRequestArgs, cb: ConnectionCb) {
   const hostname = options.hostname || options.host;
+  debug('Connecting to', hostname);
   const { protocol }= options;
 
   // infer original connect in case not patched
   const connect = options.createConnection ?? ((this instanceof HttpsAgent || protocol === 'https:' || this.defaultPort === 443) ? core.https : core.http);
 
-  debug('Connecting to', hostname);
-  verbose('options', options);
   if (hostname == null) {
     throw new Error('Host name not supplied.');
   }
@@ -56,22 +54,27 @@ export async function happyEyeballs(this: Agent, options: ClientRequestArgs, cb:
   const ac = new AbortController;
   options.signal?.addEventListener('abort', ac.abort)
 
+  const {href, ...passThroughOptions} = options as any;
+
   const track = getTracker(hostname, lookups.length, ac, cb);
   const getHostConnect = (host: string) => () => {
+    if (options.signal?.aborted) {
+      return cb(new AbortError());
+    }
     debug('Trying...', `${host}:${options.port}`);
 
     return track(connect.call(this, {
-      protocol: options.protocol,
-      hash: options.hash,
-      search: options.search,
-      port: options.port,
-      pathname: options.pathname,
+      ...passThroughOptions,
+      // protocol: options.protocol,
+      // hash: options.hash,
+      // search: options.search,
+      // port: options.port,
+      // pathname: options.pathname,
+      // signal: options.signal,
+      // timeout: options.timeout,
       agent: this,
-      host,
-      // @ts-ignore
-      socket: options.socket,
       servername: options.servername ?? options.hostname,
-      timeout: options.timeout,
+      host,
     }));
   }
 
@@ -212,12 +215,13 @@ type LookupOptions = {
   verbatim?: boolean;
   family?: number;
   all?: boolean;
-  lookup?: net.LookupFunction;
+  lookup?: LookupFunction;
   [key: string]: any;
 }
+export type LookupFunction = (hostname: string, options: dns.LookupOptions, callback: (err: NodeJS.ErrnoException | undefined | null, address: string, family: number) => void) => void;
 function lookupPromise(host: string, options: LookupOptions) {
   return new Promise<LookupAddress[]>(async (res, rej) => {
-    const cb = (err: Error | null, result: string | LookupAddress[], family?: number) => {
+    const cb = (err: Error | undefined | null, result: string | LookupAddress[], family?: number) => {
       if (err) {
         return rej(err);
       }

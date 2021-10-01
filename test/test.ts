@@ -19,6 +19,7 @@ type TestData = {
 	only?: boolean;
 	skip?: boolean;
 	parallel?: boolean;
+	always?: boolean;
 }
 const tests: Array<TestData> = [];
 
@@ -28,6 +29,7 @@ type Test = {
 	skip: (...args: any[]) => any;
 	only: (name: string, fn: TestFn) => any;
 	parallel: (name: string, fn: TestFn) => any;
+	always: (name: string, fn: TestFn) => any;
 };
 
 let depth = 0;
@@ -55,9 +57,16 @@ test.only = (TESTING
 			tests.push({depth, name, fn, only: true});
 	  }
 	: noop) as unknown as Test;
+
 test.parallel = (TESTING
 	? (name: string, fn: TestFn) => {
 			tests.push({depth, name, fn, parallel: true});
+	  }
+	: noop) as unknown as Test;
+
+test.always = (TESTING
+	? (name: string, fn: TestFn) => {
+			tests.push({depth, name, fn, always: true});
 	  }
 	: noop) as unknown as Test;
 
@@ -76,9 +85,9 @@ export const run =
 			const batch = tests.slice();
 			tests.length = 0;
 			const runTestWithResults = async (test: TestData) => {
-				const {depth:_depth, name, fn, skip, parallel, only} = test;
+				const {depth:_depth, name, fn, skip, parallel, only, always} = test;
 				const indent = ' '.repeat(_depth);
-				if (skip || hasOnlys && !only) {
+				if (skip || hasOnlys && !(only || always)) {
 					console.log(indent + chalk.yellow('○'), name);
 					return
 				}
