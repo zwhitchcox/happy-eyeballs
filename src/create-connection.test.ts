@@ -106,7 +106,7 @@ test('spam all IPs with many incorrect addresses', async () => {
   }
 });
 
-test('can abort requests', async () => {
+test.skip('can abort requests', async () => {
   const ac = new AbortController();
   try {
     const prom = http.get(base, {
@@ -126,7 +126,7 @@ test('can abort requests', async () => {
   }
 });
 
-test('https', async () => {
+test.skip('https', async () => {
   const ac = new AbortController();
   try {
     const prom = fetch(`https://api.balena-cloud.com/ping`, {
