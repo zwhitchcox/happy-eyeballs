@@ -145,26 +145,23 @@ test.skip('https', async () => {
   }
 });
 
-test.always('stop local test server', async () => {
-  await local.stop();
-});
-
 test('request', async () => {
   patch();
-  // await request(`${base}/hello`, function (error, response, body) {
-  //   if (error) {
-  //     throw error
-  //   }
-  //   expect(response.statusCode).toBe(200)
-  // });
-  await request('https://www.google.com', function (error, response, body) {
-    if (error) {
-      throw error
-    }
-    expect(response.statusCode).toBe(200)
+  await new Promise<void>((res, rej) => {
+    request(`${base}/hello`, function (error, response, body) {
+      if (error) {
+        return rej(error)
+      }
+      expect(response.statusCode).toBe(200)
+      res();
+    })
   });
   unpatch();
 })
+
+test.always('stop local test server', async () => {
+  await local.stop();
+});
 
 process.on('unhandledRejection', (err:any) => {
   console.error('unhandled rejection', err);
@@ -203,3 +200,8 @@ function mockLookup(fn: LookupManipulator) {
     return await fn(real);
   };
 }
+
+process.on('uncaughtException', err => {
+  console.error('uncaughtException', err);
+  console.error(err.stack)
+})
